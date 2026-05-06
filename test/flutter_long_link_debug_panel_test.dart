@@ -56,7 +56,10 @@ void main() {
     expect(find.text('长连接调试面板'), findsOneWidget);
     expect(find.text('已连接'), findsOneWidget);
     expect(find.text('wss://example.com/socket'), findsOneWidget);
-    expect(find.textContaining('room.message'), findsOneWidget);
+    expect(find.text('共 1 条'), findsOneWidget);
     expect(find.textContaining('decode failed'), findsOneWidget);
+    await tester.tap(find.text('共 1 条'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('room.message'), findsOneWidget);
   });
 }

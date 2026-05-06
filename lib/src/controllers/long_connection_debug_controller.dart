@@ -26,12 +26,19 @@ class LongConnectionDebugController
   void updateConnection({
     LongConnectionStatus? status,
     String? currentUrl,
+    DateTime? nextReconnectAt,
+    bool clearNextReconnectAt = false,
+    String? currentRoomId,
     int? reconnectCount,
     Map<String, Object?>? extra,
   }) {
     value = value.copyWith(
       connectionStatus: status,
       currentUrl: currentUrl,
+      nextReconnectAt: clearNextReconnectAt
+          ? null
+          : nextReconnectAt ?? value.nextReconnectAt,
+      currentRoomId: currentRoomId,
       reconnectCount: reconnectCount,
       extra: extra,
       updatedAt: DateTime.now(),
@@ -42,10 +49,12 @@ class LongConnectionDebugController
   void updateHeartbeat({
     LongConnectionHeartbeatStatus? status,
     DateTime? lastHeartbeatAt,
+    String? currentRoomId,
   }) {
     value = value.copyWith(
       heartbeatStatus: status,
       lastHeartbeatAt: lastHeartbeatAt,
+      currentRoomId: currentRoomId,
       updatedAt: DateTime.now(),
     );
   }

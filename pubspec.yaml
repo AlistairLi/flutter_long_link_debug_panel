@@ -1,6 +1,6 @@
 name: flutter_long_link_debug_panel
 description: Flutter long connection debug panel.
-version: 1.0.0
+version: 1.0.1
 repository: https://github.com/AlistairLi/flutter_long_link_debug_panel
 
 environment:

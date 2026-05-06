@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../controllers/controllers.dart';
 import '../models/models.dart';
 import 'debug_panel_environment.dart';
+import 'long_connection_command_logs_page.dart';
 
 /// 可复用的长连接调试面板页面。
 class LongConnectionDebugPanel extends StatelessWidget {
@@ -15,6 +17,11 @@ class LongConnectionDebugPanel extends StatelessWidget {
     this.enabled,
     this.title = '长连接调试面板',
     this.showAppBar = true,
+    this.showBackToFloatingButton = false,
+    this.onBackToFloating,
+    this.onConnect,
+    this.onDisconnect,
+    this.commandLogsNavigationEnabled = true,
     this.padding = const EdgeInsets.all(12),
   }) : assert(controller != null || state != null, 'controller 和 state 至少传入一个');
 
@@ -33,6 +40,21 @@ class LongConnectionDebugPanel extends StatelessWidget {
   /// 嵌入已有页面时可关闭 AppBar。
   final bool showAppBar;
 
+  /// 是否显示切回悬浮核心数据 UI 的按钮。
+  final bool showBackToFloatingButton;
+
+  /// 点击切回悬浮核心数据 UI。
+  final VoidCallback? onBackToFloating;
+
+  /// 点击连接开关时发起连接。
+  final VoidCallback? onConnect;
+
+  /// 点击连接开关时断开连接。
+  final VoidCallback? onDisconnect;
+
+  /// 是否允许从面板跳转到指令详情页。
+  final bool commandLogsNavigationEnabled;
+
   /// 内容边距。
   final EdgeInsetsGeometry padding;
 
@@ -48,8 +70,14 @@ class LongConnectionDebugPanel extends StatelessWidget {
         valueListenable: controller,
         builder: (context, state, _) => _PanelScaffold(
           title: title,
+          controller: controller,
           state: state,
           showAppBar: showAppBar,
+          showBackToFloatingButton: showBackToFloatingButton,
+          onBackToFloating: onBackToFloating,
+          onConnect: onConnect,
+          onDisconnect: onDisconnect,
+          commandLogsNavigationEnabled: commandLogsNavigationEnabled,
           padding: padding,
         ),
       );
@@ -57,8 +85,14 @@ class LongConnectionDebugPanel extends StatelessWidget {
 
     return _PanelScaffold(
       title: title,
+      controller: null,
       state: state!,
       showAppBar: showAppBar,
+      showBackToFloatingButton: showBackToFloatingButton,
+      onBackToFloating: onBackToFloating,
+      onConnect: onConnect,
+      onDisconnect: onDisconnect,
+      commandLogsNavigationEnabled: commandLogsNavigationEnabled,
       padding: padding,
     );
   }
@@ -67,14 +101,26 @@ class LongConnectionDebugPanel extends StatelessWidget {
 class _PanelScaffold extends StatelessWidget {
   const _PanelScaffold({
     required this.title,
+    required this.controller,
     required this.state,
     required this.showAppBar,
+    required this.showBackToFloatingButton,
+    required this.onBackToFloating,
+    required this.onConnect,
+    required this.onDisconnect,
+    required this.commandLogsNavigationEnabled,
     required this.padding,
   });
 
   final String title;
+  final LongConnectionDebugController? controller;
   final LongConnectionDebugState state;
   final bool showAppBar;
+  final bool showBackToFloatingButton;
+  final VoidCallback? onBackToFloating;
+  final VoidCallback? onConnect;
+  final VoidCallback? onDisconnect;
+  final bool commandLogsNavigationEnabled;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -82,9 +128,23 @@ class _PanelScaffold extends StatelessWidget {
     final body = ListView(
       padding: padding,
       children: <Widget>[
-        _SummarySection(state: state),
+        if (showBackToFloatingButton) ...<Widget>[
+          _PanelHeader(title: title, onBackToFloating: onBackToFloating),
+          const SizedBox(height: 12),
+        ],
+        _SummarySection(
+          state: state,
+          onConnect: onConnect,
+          onDisconnect: onDisconnect,
+        ),
         const SizedBox(height: 12),
-        _CommandSection(commandLogs: state.commandLogs),
+        _HeartbeatSection(state: state),
+        const SizedBox(height: 12),
+        _CommandSection(
+          controller: controller,
+          commandLogs: state.commandLogs,
+          navigationEnabled: commandLogsNavigationEnabled,
+        ),
         const SizedBox(height: 12),
         _ErrorSection(errorLogs: state.errorLogs),
         if (state.extra.isNotEmpty) ...<Widget>[
@@ -99,22 +159,78 @@ class _PanelScaffold extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        title: Text(title),
+        actions: <Widget>[
+          if (showBackToFloatingButton)
+            IconButton(
+              tooltip: '回到悬浮核心数据',
+              onPressed: onBackToFloating,
+              icon: const Icon(Icons.close_fullscreen),
+            ),
+        ],
+      ),
       body: SafeArea(child: body),
     );
   }
 }
 
+class _PanelHeader extends StatelessWidget {
+  const _PanelHeader({
+    required this.title,
+    required this.onBackToFloating,
+  });
+
+  final String title;
+  final VoidCallback? onBackToFloating;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: '悬浮面板',
+      children: [
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+            IconButton(
+              tooltip: '回到悬浮核心数据',
+              onPressed: onBackToFloating,
+              icon: const Icon(Icons.close_fullscreen),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _SummarySection extends StatelessWidget {
-  const _SummarySection({required this.state});
+  const _SummarySection({
+    required this.state,
+    required this.onConnect,
+    required this.onDisconnect,
+  });
 
   final LongConnectionDebugState state;
+  final VoidCallback? onConnect;
+  final VoidCallback? onDisconnect;
 
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
       title: '连接概览',
       children: <Widget>[
+        _ConnectionSwitchRow(
+          status: state.connectionStatus,
+          onConnect: onConnect,
+          onDisconnect: onDisconnect,
+        ),
         _InfoRow(
           label: '连接状态',
           value: state.connectionStatus.label,
@@ -124,60 +240,197 @@ class _SummarySection extends StatelessWidget {
           label: '当前连接地址',
           value: state.currentUrl.isEmpty ? '-' : state.currentUrl,
         ),
+        _InfoRow(label: '重连次数', value: '${state.reconnectCount}'),
+        if (_shouldShowNextReconnect(state))
+          _NextReconnectRow(nextReconnectAt: state.nextReconnectAt),
+        _InfoRow(label: '最近更新时间', value: _formatTime(state.updatedAt)),
+      ],
+    );
+  }
+
+  bool _shouldShowNextReconnect(LongConnectionDebugState state) {
+    return state.connectionStatus == LongConnectionStatus.failed &&
+        state.nextReconnectAt != null;
+  }
+}
+
+class _NextReconnectRow extends StatefulWidget {
+  const _NextReconnectRow({required this.nextReconnectAt});
+
+  final DateTime? nextReconnectAt;
+
+  @override
+  State<_NextReconnectRow> createState() => _NextReconnectRowState();
+}
+
+class _NextReconnectRowState extends State<_NextReconnectRow> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _InfoRow(
+      label: '下次重连',
+      value: _formatRemainingTime(widget.nextReconnectAt),
+    );
+  }
+}
+
+class _ConnectionSwitchRow extends StatelessWidget {
+  const _ConnectionSwitchRow({
+    required this.status,
+    required this.onConnect,
+    required this.onDisconnect,
+  });
+
+  final LongConnectionStatus status;
+  final VoidCallback? onConnect;
+  final VoidCallback? onDisconnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final isBusy = status == LongConnectionStatus.connecting ||
+        status == LongConnectionStatus.reconnecting;
+    final isOn = status == LongConnectionStatus.connected || isBusy;
+    final canToggle =
+        !isBusy && (isOn ? onDisconnect != null : onConnect != null);
+    final onChanged = !canToggle
+        ? null
+        : (bool value) {
+            if (value) {
+              onConnect!();
+            } else {
+              onDisconnect!();
+            }
+          };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 96,
+            child: Text(
+              '连接开关',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              _switchLabel(status),
+              style: TextStyle(
+                color: _statusColor(context, status),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Switch(value: isOn, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+
+  String _switchLabel(LongConnectionStatus status) {
+    switch (status) {
+      case LongConnectionStatus.connected:
+        return '开';
+      case LongConnectionStatus.connecting:
+        return '连接中';
+      case LongConnectionStatus.reconnecting:
+        return '重连中';
+      case LongConnectionStatus.failed:
+      case LongConnectionStatus.disconnected:
+        return '关';
+    }
+  }
+}
+
+class _HeartbeatSection extends StatelessWidget {
+  const _HeartbeatSection({required this.state});
+
+  final LongConnectionDebugState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: '房间心跳',
+      children: <Widget>[
+        _InfoRow(
+          label: '当前房间',
+          value: state.currentRoomId.isEmpty ? '-' : state.currentRoomId,
+        ),
         _InfoRow(
           label: '心跳状态',
           value: state.heartbeatStatus.label,
           valueColor: _heartbeatColor(context, state.heartbeatStatus),
         ),
         _InfoRow(label: '最近心跳时间', value: _formatTime(state.lastHeartbeatAt)),
-        _InfoRow(label: '重连次数', value: '${state.reconnectCount}'),
-        _InfoRow(label: '最近更新时间', value: _formatTime(state.updatedAt)),
       ],
     );
   }
 }
 
 class _CommandSection extends StatelessWidget {
-  const _CommandSection({required this.commandLogs});
+  const _CommandSection({
+    required this.controller,
+    required this.commandLogs,
+    required this.navigationEnabled,
+  });
 
+  final LongConnectionDebugController? controller;
   final List<LongConnectionCommandLog> commandLogs;
+  final bool navigationEnabled;
 
   @override
   Widget build(BuildContext context) {
+    final canNavigate = navigationEnabled && Navigator.maybeOf(context) != null;
     return _SectionCard(
       title: '最近收到的指令',
-      emptyText: '暂无指令日志',
-      children: commandLogs
-          .map((log) => _CommandTile(log: log))
-          .toList(growable: false),
-    );
-  }
-}
-
-class _CommandTile extends StatelessWidget {
-  const _CommandTile({required this.log});
-
-  final LongConnectionCommandLog log;
-
-  @override
-  Widget build(BuildContext context) {
-    final direction = log.isIncoming ? '收到' : '发出';
-    return ExpansionTile(
-      tilePadding: EdgeInsets.zero,
-      title: Text(
-        '$direction · ${log.type}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(_formatTime(log.timestamp)),
-      childrenPadding: const EdgeInsets.only(bottom: 8),
       children: <Widget>[
-        if (log.id != null) _InfoRow(label: '指令 ID', value: log.id!),
-        _InfoRow(label: '指令类型', value: log.type),
-        _PayloadBlock(label: '指令原始数据', value: log.rawData),
-        _PayloadBlock(label: '指令解析结果', value: log.parsedResult),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text('共 ${commandLogs.length} 条'),
+          subtitle: Text(_subtitle(canNavigate)),
+          trailing: canNavigate ? const Icon(Icons.chevron_right) : null,
+          onTap: canNavigate
+              ? () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => LongConnectionCommandLogsPage(
+                        controller: controller,
+                        commandLogs: commandLogs,
+                      ),
+                    ),
+                  );
+                }
+              : null,
+        ),
       ],
     );
+  }
+
+  String _subtitle(bool canNavigate) {
+    if (commandLogs.isEmpty) {
+      return '暂无指令日志';
+    }
+    return canNavigate ? '点击查看指令详情' : '悬浮详情中不可打开指令详情页';
   }
 }
 
@@ -191,9 +444,8 @@ class _ErrorSection extends StatelessWidget {
     return _SectionCard(
       title: '错误日志',
       emptyText: '暂无错误日志',
-      children: errorLogs
-          .map((log) => _ErrorTile(log: log))
-          .toList(growable: false),
+      children:
+          errorLogs.map((log) => _ErrorTile(log: log)).toList(growable: false),
     );
   }
 }
@@ -291,7 +543,7 @@ class _InfoRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SizedBox(
-            width: 96,
+            width: 102,
             child: Text(
               label,
               style: TextStyle(
@@ -383,6 +635,20 @@ String _formatTime(DateTime? time) {
     twoDigits(local.second),
   ].join(':');
   return '$date $clock';
+}
+
+String _formatRemainingTime(DateTime? time) {
+  if (time == null) {
+    return '-';
+  }
+  final remaining = time.difference(DateTime.now());
+  if (remaining.isNegative) {
+    return '即将重连';
+  }
+  if (remaining.inMinutes >= 1) {
+    return '${remaining.inMinutes} 分 ${remaining.inSeconds.remainder(60)} 秒后';
+  }
+  return '${remaining.inSeconds} 秒后';
 }
 
 Color _statusColor(BuildContext context, LongConnectionStatus status) {

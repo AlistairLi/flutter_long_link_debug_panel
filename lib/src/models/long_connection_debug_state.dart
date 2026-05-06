@@ -2,11 +2,15 @@ import 'long_connection_command_log.dart';
 import 'long_connection_error_log.dart';
 import 'long_connection_status.dart';
 
+const Object _unset = Object();
+
 /// 长连接调试面板的完整快照。
 class LongConnectionDebugState {
   const LongConnectionDebugState({
     this.connectionStatus = LongConnectionStatus.disconnected,
     this.currentUrl = '',
+    this.nextReconnectAt,
+    this.currentRoomId = '',
     this.heartbeatStatus = LongConnectionHeartbeatStatus.idle,
     this.lastHeartbeatAt,
     this.reconnectCount = 0,
@@ -26,6 +30,12 @@ class LongConnectionDebugState {
 
   /// 当前 WebSocket/TCP/MQTT 等长连地址。
   final String currentUrl;
+
+  /// 下一次自动重连时间。
+  final DateTime? nextReconnectAt;
+
+  /// 当前房间 ID，心跳状态通常和房间关联。
+  final String currentRoomId;
 
   /// 心跳状态。
   final LongConnectionHeartbeatStatus heartbeatStatus;
@@ -51,6 +61,8 @@ class LongConnectionDebugState {
   LongConnectionDebugState copyWith({
     LongConnectionStatus? connectionStatus,
     String? currentUrl,
+    Object? nextReconnectAt = _unset,
+    String? currentRoomId,
     LongConnectionHeartbeatStatus? heartbeatStatus,
     DateTime? lastHeartbeatAt,
     int? reconnectCount,
@@ -62,6 +74,10 @@ class LongConnectionDebugState {
     return LongConnectionDebugState(
       connectionStatus: connectionStatus ?? this.connectionStatus,
       currentUrl: currentUrl ?? this.currentUrl,
+      nextReconnectAt: identical(nextReconnectAt, _unset)
+          ? this.nextReconnectAt
+          : nextReconnectAt as DateTime?,
+      currentRoomId: currentRoomId ?? this.currentRoomId,
       heartbeatStatus: heartbeatStatus ?? this.heartbeatStatus,
       lastHeartbeatAt: lastHeartbeatAt ?? this.lastHeartbeatAt,
       reconnectCount: reconnectCount ?? this.reconnectCount,
